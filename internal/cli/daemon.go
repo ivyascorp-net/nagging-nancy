@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -65,12 +66,12 @@ func init() {
 
 // Daemon represents the background daemon process
 type Daemon struct {
-	app            *app.App
-	checkInterval  time.Duration
-	ctx            context.Context
-	cancel         context.CancelFunc
-	notifier       *utils.Notifier
-	lastNotified   map[string]time.Time // Track last notification time per reminder ID
+	app           *app.App
+	checkInterval time.Duration
+	ctx           context.Context
+	cancel        context.CancelFunc
+	notifier      *utils.Notifier
+	lastNotified  map[string]time.Time // Track last notification time per reminder ID
 }
 
 // NewDaemon creates a new daemon instance
@@ -108,7 +109,14 @@ func (d *Daemon) Run() error {
 			log.Println("Nancy daemon stopped")
 			return nil
 		case <-ticker.C:
-			d.checkReminders()
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("Recovered from panic in checkReminders: %v", r)
+					}
+				}()
+				d.checkReminders()
+			}()
 		}
 	}
 }
@@ -122,12 +130,37 @@ func (d *Daemon) Stop() {
 
 // checkReminders checks for due reminders and sends notifications
 func (d *Daemon) checkReminders() {
+	log.Printf("Checking reminders at %v", time.Now())
+
+	// Reload reminders from storage to get any updates made by other processes
+	store := d.app.GetStore()
+	if err := store.Load(); err != nil {
+		log.Printf("Failed to reload reminders from storage: %v", err)
+		return
+	}
+
 	filter := &models.FilterOptions{
 		ShowCompleted: false,
 	}
 
 	reminders := d.app.GetReminders(filter)
 	now := time.Now()
+
+	log.Printf("Found %d active reminders to check (reloaded from storage)", len(reminders))
+
+	// Clean up notification tracking for reminders that no longer exist
+	currentReminderIDs := make(map[string]bool)
+	for _, reminder := range reminders {
+		currentReminderIDs[reminder.ID] = true
+	}
+
+	// Remove tracking for deleted reminders
+	for reminderID := range d.lastNotified {
+		if !currentReminderIDs[reminderID] {
+			delete(d.lastNotified, reminderID)
+			log.Printf("Cleaned up notification tracking for deleted reminder: %s", reminderID)
+		}
+	}
 
 	for _, reminder := range reminders {
 		// Skip if already completed
@@ -202,7 +235,7 @@ func getPIDFilePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	configDir := app.GetConfig().GetConfigDir()
 	return filepath.Join(configDir, "daemon.pid"), nil
 }
@@ -284,12 +317,59 @@ func startDaemon(cmd *cobra.Command, args []string) error {
 	}
 
 	if !foreground {
-		// Write PID file
-		if err := writePIDFile(); err != nil {
-			return fmt.Errorf("failed to write PID file: %w", err)
-		}
-		defer removePIDFile()
+		// Daemonize: fork and run in background
+		return daemonizeProcess(daemon, interval)
 	}
+
+	// Foreground mode: run in current process
+	return runDaemonForeground(daemon, interval)
+}
+
+// daemonizeProcess forks the process and runs the daemon in background
+func daemonizeProcess( interval time.Duration) error {
+	// Fork the process using exec to create a true daemon
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Prepare arguments for the background process
+	args := []string{
+		"daemon", "start",
+		"--foreground", // The child process will run in foreground mode
+		"--interval", interval.String(),
+	}
+
+	// Start the process in background
+	cmd := exec.Command(executable, args...)
+	cmd.Stdin = nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true, // Create new session (detach from terminal)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start daemon process: %w", err)
+	}
+	// Write PID file
+	pidFile, err := getPIDFilePath()
+	if err != nil {
+		return fmt.Errorf("failed to get PID file path: %w", err)
+	}
+
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(cmd.Process.Pid)), 0644); err != nil {
+		return fmt.Errorf("failed to write PID file: %w", err)
+	}
+
+	fmt.Printf("Nancy daemon started with PID %d\n", cmd.Process.Pid)
+	return nil
+}
+
+// runDaemonForeground runs the daemon in the current process
+func runDaemonForeground(daemon *Daemon, interval time.Duration) error {
+	fmt.Println("Nancy daemon started in foreground mode")
+	fmt.Printf("Check interval: %v\n", interval)
 
 	// Set up signal handling
 	sigChan := make(chan os.Signal, 1)
@@ -301,13 +381,6 @@ func startDaemon(cmd *cobra.Command, args []string) error {
 		errChan <- daemon.Run()
 	}()
 
-	if foreground {
-		fmt.Println("Nancy daemon started in foreground mode")
-		fmt.Printf("Check interval: %v\n", interval)
-	} else {
-		fmt.Println("Nancy daemon started")
-	}
-
 	// Wait for signal or error
 	select {
 	case sig := <-sigChan:
@@ -315,7 +388,10 @@ func startDaemon(cmd *cobra.Command, args []string) error {
 		daemon.Stop()
 		return nil
 	case err := <-errChan:
-		return err
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 }
 
