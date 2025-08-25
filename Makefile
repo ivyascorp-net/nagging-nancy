@@ -207,6 +207,11 @@ test-notifications: build ## Test notification system
 	@echo "Testing notifications..."
 	./$(BUILD_DIR)/$(BINARY_NAME) test notification
 
+.PHONY: install-notifications
+install-notifications: ## Install platform-specific notification dependencies
+	@echo "Installing notification dependencies..."
+	./scripts/install-notifications.sh
+
 .PHONY: add-test-reminder
 add-test-reminder: build ## Add a test reminder
 	@echo "Adding test reminder..."
