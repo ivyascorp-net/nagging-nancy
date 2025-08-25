@@ -44,9 +44,10 @@ func init() {
 	rootCmd.AddCommand(completeCmd)
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(editCmd)
+	rootCmd.AddCommand(daemonCmd)
+	rootCmd.AddCommand(testCmd)
 	// rootCmd.AddCommand(tuiCmd)
 	// rootCmd.AddCommand(configCmd)
-	// rootCmd.AddCommand(daemonCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	// Global flags

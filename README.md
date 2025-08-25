@@ -9,11 +9,11 @@ Nancy is a fast, lightweight terminal application that helps you manage reminder
 - 🚀 **Lightning fast** - Single binary, instant startup
 - 🎨 **Beautiful TUI** - Clean, interactive terminal interface
 - ⚡ **Quick CLI commands** - Add reminders without opening the interface
-- 🔔 **Smart notifications** - Cross-platform desktop notifications
+- 🔔 **Smart notifications** - Cross-platform desktop notifications with intelligent timing
 - 📅 **Natural language** - "Call mom tomorrow at 2pm"
 - 🎯 **Priority system** - High, medium, low priority tasks
 - 💾 **Local storage** - Your data stays on your machine
-- 🌙 **Background daemon** - Persistent reminder monitoring
+- 🌙 **Background daemon** - Persistent reminder monitoring with configurable intervals
 - ⌨️ **Keyboard-first** - Navigate entirely with keyboard shortcuts
 
 ## 📦 Installation
@@ -74,8 +74,13 @@ nancy rm 2                   # Alias for delete
 
 # Background daemon
 nancy daemon start           # Start background notifications
+nancy daemon start --foreground  # Run in foreground for debugging
 nancy daemon stop            # Stop background notifications
 nancy daemon status          # Check daemon status
+nancy daemon restart         # Restart daemon
+
+# Test notifications
+nancy test notification      # Send test notification
 ```
 
 ## ⌨️ TUI Keyboard Shortcuts
@@ -177,29 +182,73 @@ Your reminders are stored locally in:
 
 Nancy never sends your data anywhere - everything stays on your machine.
 
+## 🔔 Notification System
+
+Nancy includes a comprehensive cross-platform notification system:
+
+### Supported Platforms
+- **Linux**: notify-send (libnotify) or dunstify
+- **macOS**: osascript (built-in) or terminal-notifier  
+- **Windows**: PowerShell toast notifications
+
+### Notification Types
+```bash
+# Test your notification system
+nancy test notification
+
+# The daemon sends different types of notifications:
+# - 📅 Due Today: Sent once per day for today's reminders
+# - ⏰ Due Soon: Sent 15 minutes before due time
+# - ⚠️  Overdue: Sent hourly until reminder is completed
+```
+
+### Fallback Methods
+If desktop notifications aren't available, Nancy automatically falls back to:
+1. **Terminal Bell** - Audible bell with message in terminal
+2. **Log Only** - Messages logged to stderr
+
+### Priority Levels
+Notifications respect reminder priorities:
+- **High Priority** 🔴: Critical/urgent notification with sound
+- **Medium Priority** 🟡: Normal notification  
+- **Low Priority** 🟢: Low urgency notification
+
 ## 🔄 Background Daemon
 
 Start the background daemon to receive notifications even when Nancy isn't running:
 
 ```bash
-# Start daemon
+# Start daemon (runs in background)
 nancy daemon start
 
-# Check status
+# Start daemon in foreground (for debugging)
+nancy daemon start --foreground
+
+# Start daemon with custom check interval
+nancy daemon start --interval 2m
+
+# Check daemon status
 nancy daemon status
 
-# View logs
-nancy daemon logs
+# Restart daemon
+nancy daemon restart
 
 # Stop daemon
 nancy daemon stop
+
+# Test notification system
+nancy test notification
 ```
 
 The daemon will:
-- Send desktop notifications for due reminders
-- Respect your working hours settings
-- Run quietly in the background
-- Auto-start on system boot (optional)
+- Monitor reminders every 5 minutes (configurable)
+- Send desktop notifications for:
+  - **Overdue reminders** - Every hour until completed
+  - **Due soon** - 15 minutes before due time 
+  - **Due today** - Once per day for today's reminders
+- Use PID file to prevent multiple instances
+- Handle graceful shutdown via signals
+- Fall back to terminal notifications if desktop unavailable
 
 ## 🎨 Screenshots
 
@@ -227,6 +276,48 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+## 🔧 Troubleshooting
+
+### Daemon Issues
+```bash
+# Check if daemon is running
+nancy daemon status
+
+# Stop any stuck processes
+nancy daemon stop
+
+# Start daemon in foreground to see logs
+nancy daemon start --foreground
+
+# Check PID file location
+# Linux/macOS: ~/.config/nancy/daemon.pid
+# Windows: %APPDATA%/nancy/daemon.pid
+```
+
+### Notification Issues
+```bash
+# Test notifications
+nancy test notification
+
+# Check available notification methods
+nancy test notification  # Shows available methods at the end
+
+# Linux: Install notification dependencies
+sudo apt install libnotify-bin  # notify-send
+# or
+sudo apt install dunst          # dunstify
+
+# macOS: Install optional terminal-notifier
+brew install terminal-notifier
+
+# Windows: PowerShell should be available by default
+```
+
+### Common Issues
+- **No notifications**: Run `nancy test notification` to verify system
+- **Daemon won't start**: Check if another instance is running with `nancy daemon status`
+- **Permission errors**: Ensure Nancy has permission to create files in config directory
+
 ## 🐛 Bug Reports
 
 Found a bug? Please open an issue with:
@@ -234,6 +325,8 @@ Found a bug? Please open an issue with:
 - Nancy version (`nancy version`)
 - Steps to reproduce
 - Expected vs actual behavior
+- Output of `nancy test notification` (for notification issues)
+- Output of `nancy daemon status` (for daemon issues)
 
 ## 📄 License
 
@@ -244,7 +337,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework
 - Styled with [Lip Gloss](https://github.com/charmbracelet/lipgloss)
 - CLI powered by [Cobra](https://github.com/spf13/cobra)
-- Notifications via [Beeep](https://github.com/gen2brain/beeep)
+- Cross-platform notifications (notify-send, osascript, PowerShell)
 
 ---
 
