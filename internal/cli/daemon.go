@@ -300,15 +300,18 @@ func isDaemonRunning() (bool, int, error) {
 
 // startDaemon starts the Nancy daemon
 func startDaemon(cmd *cobra.Command, args []string) error {
-	// Check if daemon is already running
-	if running, pid, err := isDaemonRunning(); err != nil {
-		return fmt.Errorf("failed to check daemon status: %w", err)
-	} else if running {
-		return fmt.Errorf("daemon is already running with PID %d", pid)
-	}
-
 	interval, _ := cmd.Flags().GetDuration("interval")
 	foreground, _ := cmd.Flags().GetBool("foreground")
+
+	// Only check if daemon is already running when not in foreground mode
+	// (foreground mode is used by the daemonized child process)
+	if !foreground {
+		if running, pid, err := isDaemonRunning(); err != nil {
+			return fmt.Errorf("failed to check daemon status: %w", err)
+		} else if running {
+			return fmt.Errorf("daemon is already running with PID %d", pid)
+		}
+	}
 
 	app := getApp()
 	daemon, err := NewDaemon(app, interval)
@@ -318,15 +321,26 @@ func startDaemon(cmd *cobra.Command, args []string) error {
 
 	if !foreground {
 		// Daemonize: fork and run in background
-		return daemonizeProcess(daemon, interval)
+		return daemonizeProcess(interval)
 	}
 
-	// Foreground mode: run in current process
+	// Foreground mode: run in current process (write PID file for tracking)
+	if err := writePIDFile(); err != nil {
+		log.Printf("Warning: failed to write PID file: %v", err)
+	}
+	
+	// Set up cleanup on exit
+	defer func() {
+		if err := removePIDFile(); err != nil {
+			log.Printf("Warning: failed to remove PID file: %v", err)
+		}
+	}()
+
 	return runDaemonForeground(daemon, interval)
 }
 
 // daemonizeProcess forks the process and runs the daemon in background
-func daemonizeProcess( interval time.Duration) error {
+func daemonizeProcess(interval time.Duration) error {
 	// Fork the process using exec to create a true daemon
 	executable, err := os.Executable()
 	if err != nil {
@@ -346,12 +360,14 @@ func daemonizeProcess( interval time.Duration) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true, // Create new session (detach from terminal)
+		Setpgid: true,
+		Setctty: false, // Create new session (detach from terminal)
 	}
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start daemon process: %w", err)
 	}
+
 	// Write PID file
 	pidFile, err := getPIDFilePath()
 	if err != nil {
