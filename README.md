@@ -18,29 +18,65 @@ Nancy is a fast, lightweight terminal application that helps you manage reminder
 
 ## 📦 Installation
 
-### Download Binary (Recommended)
+### Homebrew (Recommended)
+```bash
+# Add the tap and install (macOS/Linux)
+brew tap ivyascorp-net/nagging-nancy
+brew install nagging-nancy
+
+# Or install from local formula
+brew install ./nagging-nancy.rb
+```
+
+After installation with Homebrew, Nancy will automatically detect and use the best notification method for your platform. To install enhanced notification support:
+
+**macOS:**
+```bash
+# Optional: Install terminal-notifier for better notifications
+brew install terminal-notifier
+```
+
+**Linux:**
+```bash
+# Install notification dependencies (auto-detected by package manager)
+sudo apt install libnotify-bin    # Ubuntu/Debian
+sudo dnf install libnotify         # Fedora
+sudo pacman -S libnotify          # Arch Linux
+```
+
+### Download Binary
 ```bash
 # Download latest release for your platform
-curl -L https://github.com/yourusername/nagging-nancy/releases/latest/download/nancy-linux-amd64 -o nancy
+curl -L https://github.com/ivyascorp-net/nagging-nancy/releases/latest/download/nancy-linux-amd64 -o nancy
 chmod +x nancy
 sudo mv nancy /usr/local/bin/
 ```
 
 ### Build from Source
 ```bash
-git clone https://github.com/yourusername/nagging-nancy.git
+git clone https://github.com/ivyascorp-net/nagging-nancy.git
 cd nagging-nancy
-go build -o nancy cmd/nancy/main.go
-sudo mv nancy /usr/local/bin/
+make build
+sudo cp build/nancy /usr/local/bin/
 ```
 
-### Package Managers
+### Other Package Managers
 ```bash
-# Homebrew (macOS/Linux)
-brew install nagging-nancy
-
 # Go install
-go install github.com/yourusername/nagging-nancy/cmd/nancy@latest
+go install github.com/ivyascorp-net/nagging-nancy/cmd/nancy@latest
+```
+
+### Post-Installation Setup
+After installing Nancy, set up notification dependencies:
+```bash
+# Automatic setup script (detects your platform)
+make install-notifications
+
+# Or manually run the script
+./scripts/install-notifications.sh
+
+# Test your notification setup
+nancy test notification
 ```
 
 ## 🚀 Quick Start
@@ -66,11 +102,9 @@ nancy list --priority high   # High priority only
 
 # Complete tasks
 nancy complete 1             # Complete reminder with ID 1
-nancy done 1                 # Alias for complete
 
 # Delete reminders
 nancy delete 2               # Delete reminder with ID 2
-nancy rm 2                   # Alias for delete
 
 # Background daemon
 nancy daemon start           # Start background notifications
@@ -81,6 +115,9 @@ nancy daemon restart         # Restart daemon
 
 # Test notifications
 nancy test notification      # Send test notification
+
+# Setup notifications for your platform  
+make install-notifications   # Auto-install notification dependencies
 ```
 
 ## ⌨️ TUI Keyboard Shortcuts
@@ -111,10 +148,12 @@ nancy add "Team standup" --time "9:30am"
 # With priority and date
 nancy add "Submit report" --date "2024-03-20" --priority high
 
-# Natural language parsing
+# With tags
+nancy add "Review code" --tags work,coding --priority medium
+
+# Basic natural language support
 nancy add "Doctor appointment tomorrow at 2pm"
-nancy add "Call John today at 3:30"
-nancy add "Grocery shopping this Friday at 6pm"
+nancy add "Team meeting today at 3:30pm"
 ```
 
 ### Listing and Filtering
@@ -128,59 +167,63 @@ nancy list --priority high   # High priority only
 
 # Combine filters
 nancy list --today --priority high
+nancy list --tags work,urgent --all
 ```
 
 ### Configuration
-```bash
-# Set default priority
-nancy config set default.priority medium
-
-# Configure notification timing
-nancy config set notifications.advance_minutes 15
-
-# Set working hours
-nancy config set workhours.start "09:00"
-nancy config set workhours.end "17:00"
-
-# View current config
-nancy config show
-```
-
-## 🔧 Configuration
-
-Nancy stores its configuration in:
+Configuration is managed through the config file located at:
 - **Linux/macOS**: `~/.config/nancy/config.yaml`
 - **Windows**: `%APPDATA%/nancy/config.yaml`
 
+Nancy automatically creates a default configuration file on first run. Edit the file directly to customize settings.
+
+## 🔧 Configuration Files
+
+Nancy stores its files in:
+- **Config**: `~/.config/nancy/config.yaml` (Linux/macOS) or `%APPDATA%/nancy/config.yaml` (Windows)
+- **Data**: `~/.local/share/nancy/` (Linux) or `%LOCALAPPDATA%/nancy/` (Windows)
+- **macOS**: `~/Library/Application Support/nancy/`
+
 Example configuration:
 ```yaml
+# Default settings for new reminders
 default:
-  priority: medium
-  advance_minutes: 10
+  priority: medium          # low, medium, high
+  advance_minutes: 10       # Default notification advance time
 
+# Notification settings
 notifications:
-  enabled: true
-  sound: true
-  advance_minutes: 15
+  enabled: true             # Enable desktop notifications
+  sound: true               # Play notification sound
+  advance_minutes: 15       # How many minutes before due time to notify
+  quiet_hours: true         # Respect working hours for notifications
 
+# Appearance settings
 appearance:
-  theme: auto  # light, dark, auto
-  show_completed: false
+  theme: auto               # light, dark, auto
+  show_completed: false     # Show completed tasks in main list
+  compact_mode: false       # Use compact display mode
+  show_icons: true          # Show priority and status icons
 
+# Working hours (for quiet notifications)
 workhours:
-  enabled: true
-  start: "09:00"
-  end: "17:00"
-  quiet_outside: true
+  enabled: true             # Enable working hours
+  start: "09:00"            # Work start time (24-hour format)
+  end: "17:00"              # Work end time (24-hour format)
+  quiet_outside: true       # Quiet notifications outside work hours
+  timezone: "Local"         # Timezone (Local or specific timezone)
+
+# Background daemon settings
+daemon:
+  check_interval: 5         # Check for due reminders every N minutes
+  auto_start: false         # Auto-start daemon on system boot
+  log_level: "info"         # Logging level: debug, info, warn, error
 ```
 
-## 📁 Data Storage
-
-Your reminders are stored locally in:
-- **Linux/macOS**: `~/.config/nancy/reminders.json`
-- **Windows**: `%APPDATA%/nancy/reminders.json`
-
-Nancy never sends your data anywhere - everything stays on your machine.
+Your reminders and configuration are stored locally:
+- **Configuration**: Stored in OS-appropriate config directories 
+- **Data**: Stored in OS-appropriate data directories (separate from config)
+- **Privacy**: Nancy never sends your data anywhere - everything stays on your machine
 
 ## 🔔 Notification System
 
@@ -225,7 +268,7 @@ nancy daemon start
 nancy daemon start --foreground
 
 # Start daemon with custom check interval
-nancy daemon start --interval 2m
+nancy daemon start --interval 2m0s
 
 # Check daemon status
 nancy daemon status
@@ -289,9 +332,10 @@ nancy daemon stop
 # Start daemon in foreground to see logs
 nancy daemon start --foreground
 
-# Check PID file location
-# Linux/macOS: ~/.config/nancy/daemon.pid
-# Windows: %APPDATA%/nancy/daemon.pid
+# Check data directory for daemon files
+# Linux: ~/.local/share/nancy/
+# macOS: ~/Library/Application Support/nancy/
+# Windows: %LOCALAPPDATA%/nancy/
 ```
 
 ### Notification Issues
@@ -302,10 +346,18 @@ nancy test notification
 # Check available notification methods
 nancy test notification  # Shows available methods at the end
 
-# Linux: Install notification dependencies
-sudo apt install libnotify-bin  # notify-send
+# Auto-install notification dependencies for your platform
+make install-notifications
 # or
-sudo apt install dunst          # dunstify
+./scripts/install-notifications.sh
+
+# Manual installation:
+# Linux: Install notification dependencies
+sudo apt install libnotify-bin  # Ubuntu/Debian (notify-send)
+sudo dnf install libnotify       # Fedora (notify-send)  
+sudo pacman -S libnotify        # Arch Linux (notify-send)
+# or
+sudo apt install dunst          # dunstify alternative
 
 # macOS: Install optional terminal-notifier
 brew install terminal-notifier
@@ -321,12 +373,13 @@ brew install terminal-notifier
 ## 🐛 Bug Reports
 
 Found a bug? Please open an issue with:
-- Your operating system
-- Nancy version (`nancy version`)
-- Steps to reproduce
+- Your operating system and version
+- Nancy version (`nancy version`)  
+- Steps to reproduce the issue
 - Expected vs actual behavior
-- Output of `nancy test notification` (for notification issues)
-- Output of `nancy daemon status` (for daemon issues)
+- For notification issues: Output of `nancy test notification`
+- For daemon issues: Output of `nancy daemon status`
+- Relevant log files if available
 
 ## 📄 License
 
@@ -335,9 +388,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework
-- Styled with [Lip Gloss](https://github.com/charmbracelet/lipgloss)
+- Styled with [Lip Gloss](https://github.com/charmbracelet/lipgloss)  
 - CLI powered by [Cobra](https://github.com/spf13/cobra)
-- Cross-platform notifications (notify-send, osascript, PowerShell)
+- Configuration with [Viper](https://github.com/spf13/viper)
+- Cross-platform notifications: notify-send, terminal-notifier, osascript, PowerShell
 
 ---
 
