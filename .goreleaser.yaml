@@ -1,0 +1,77 @@
+version: 2
+
+project_name: nancy
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: nancy
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - "386"
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - "6"
+      - "7"
+    main: ./cmd/nancy
+    binary: nancy
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.buildTime={{.Date}}
+      - -X main.gitCommit={{.Commit}}
+
+archives:
+  - name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  # Repo in which the release will be created.
+  # Default is extracted from the origin remote URL or empty if its private hosted.
+  # Valid options are either github, gitlab or gitea
+  github:
+    owner: ivyascorp-net
+    name: nagging-nancy
+
+  # You can change the name of the release.
+  name_template: "{{.ProjectName}} v{{.Version}}"
+
+  # You can disable this pipe in order to not upload any artifacts.
+  disable: false
+
+  # Set to true if you want to disable just the artifact upload to the SCM.
+  skip_upload: false
+
+  # You can add extra pre-existing files to the release.
+  extra_files:
+    - glob: ./README.md
