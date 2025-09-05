@@ -1,11 +1,34 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ivyascorp-net/nagging-nancy/internal/tui/components"
 )
 
 // Update implements tea.Model
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle edit form updates when in edit mode
+	if m.editing && m.editForm != nil {
+		var cmd tea.Cmd
+		m.editForm, cmd = m.editForm.Update(msg)
+		
+		if m.editForm.Done() {
+			// Save the edited reminder
+			reminder := m.editForm.GetReminder()
+			if err := m.store.Update(reminder); err == nil {
+				m.refreshReminders()
+			}
+			m.editing = false
+			m.editForm = nil
+		} else if m.editForm.Cancelled() {
+			// Cancel editing
+			m.editing = false
+			m.editForm = nil
+		}
+		
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -59,6 +82,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if current := m.getCurrentReminder(); current != nil {
 				m.store.Delete(current.ID)
 				m.refreshReminders()
+			}
+			return m, nil
+
+		case "e":
+			if current := m.getCurrentReminder(); current != nil {
+				reminder, err := m.store.Get(current.ID)
+				if err != nil {
+					return m, nil
+				}
+				m.editing = true
+				m.editForm = components.NewEditForm(reminder)
+				return m, m.editForm.Init()
 			}
 			return m, nil
 

@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"github.com/ivyascorp-net/nagging-nancy/internal/app"
 	"github.com/ivyascorp-net/nagging-nancy/internal/models"
+	"github.com/ivyascorp-net/nagging-nancy/internal/tui/components"
 )
 
 // Model represents the application state for the TUI
@@ -17,6 +18,8 @@ type Model struct {
 	showHelp     bool
 	filter       *models.FilterOptions
 	quitting     bool
+	editing      bool
+	editForm     *components.EditForm
 }
 
 // NewModel creates a new TUI model

@@ -36,6 +36,10 @@ func (m Model) View() string {
 		return "Thanks for using Nagging Nancy! 👋\n"
 	}
 
+	if m.editing && m.editForm != nil {
+		return m.editForm.View()
+	}
+
 	if m.showHelp {
 		return m.helpView()
 	}
@@ -113,6 +117,7 @@ Navigation:
   
 Actions:
   space    Toggle reminder completion
+  e        Edit selected reminder  
   d        Delete selected reminder
   r        Refresh list
   f        Toggle show completed
@@ -132,7 +137,7 @@ func (m Model) statusBarView() string {
 	status := fmt.Sprintf("Total: %d | Active: %d | Completed: %d | Overdue: %d",
 		total, active, completed, overdue)
 
-	controls := "space=toggle d=delete f=filter ?=help q=quit"
+	controls := "space=toggle e=edit d=delete f=filter ?=help q=quit"
 
 	// Pad to full width
 	padding := m.width - len(status) - len(controls)
